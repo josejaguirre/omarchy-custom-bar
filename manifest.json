@@ -4,7 +4,8 @@
   "name": "Custom Bar",
   "version": "1.0.0",
   "author": "Jose Aguirre",
-  "description": "Status bar with widgets",
+  "license": "MIT",
+  "description": "Floating bar with rounded corners, transparency, Waybar-style per-widget pills and per-element colors",
   "kinds": [
     "bar"
   ],

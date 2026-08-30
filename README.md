@@ -15,7 +15,7 @@ README at `/usr/share/omarchy/shell/plugins/bar/README.md`.
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/<user>/<repo>.git --enable
+omarchy plugin add https://github.com/josejaguirre/omarchy-custom-bar.git --enable
 ```
 
 `--enable` switches the shell over immediately. It installs into
@@ -267,3 +267,9 @@ diff /usr/share/omarchy/shell/plugins/bar/Bar.qml Bar.qml
 
 `omarchy update` never touches this plugin, but it never brings it stock
 improvements either.
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
