@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "josejaguirre.bar",
+  "name": "Custom Bar",
+  "version": "1.0.0",
+  "author": "Jose Aguirre",
+  "description": "Status bar with widgets",
+  "kinds": [
+    "bar"
+  ],
+  "entryPoints": {
+    "bar": "Bar.qml"
+  },
+  "omarchy": {
+    "clonedFrom": "omarchy.bar"
+  }
+}
