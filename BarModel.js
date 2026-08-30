@@ -208,6 +208,81 @@ function nearestDropTarget(candidates, point, vertical) {
   return best
 }
 
+// --- Battery-driven per-element color -------------------------------------
+
+function batteryFraction(device) {
+  return device && device.isPresent ? Math.max(0, Math.min(1, device.percentage)) : 0
+}
+
+// Charger attached but the firmware is holding the charge ("Threshold" in the
+// power panel). Ported from omarchy.power's Model.js: its internals are not a
+// contract, and a rename there would strand the "hold" color silently.
+function chargeThresholdActive(device, onBattery, states) {
+  var d = device || {}
+  var s = states || {}
+  if (!(d && d.isPresent && !onBattery)) return false
+
+  var fraction = batteryFraction(d)
+  if (d.state === s.Discharging) return false
+  if (d.state === s.PendingCharge) return true
+  if (d.state === s.FullyCharged && fraction < 0.99) return true
+  if (d.state !== s.Charging || fraction >= 0.99) return false
+
+  return Number(d.changeRate || 0) <= 0.2 || Number(d.timeToFull || 0) >= 8 * 60 * 60
+}
+
+function normalizeHexColor(value) {
+  if (typeof value !== "string") return ""
+  var color = value.replace(/^\s+|\s+$/g, "")
+  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(color) ? color : ""
+}
+
+// Either "#RRGGBB" or { "min": <percent>, "color": "#RRGGBB" }.
+function batteryTier(value, defaultMin) {
+  var color = ""
+  var min = defaultMin
+  if (typeof value === "string") {
+    color = normalizeHexColor(value)
+  } else if (isPlainObject(value)) {
+    color = normalizeHexColor(value["color"])
+    var raw = Number(value["min"])
+    if (isFinite(raw)) min = Math.max(0, Math.min(100, raw))
+  }
+  return color ? { min: min, color: color } : null
+}
+
+// Null when absent or nothing parsed, leaving the entry on its static `color`.
+function batteryColorRules(entry) {
+  if (!isPlainObject(entry)) return null
+  var raw = entry["batteryColors"]
+  if (!isPlainObject(raw)) return null
+
+  var tiers = []
+  var high = batteryTier(raw["high"], 80)
+  var medium = batteryTier(raw["medium"], 30)
+  var low = batteryTier(raw["low"], 0)
+  if (high) tiers.push(high)
+  if (medium) tiers.push(medium)
+  if (low) tiers.push(low)
+  // Highest floor first, so out-of-order or overlapping tiers still resolve.
+  tiers.sort(function(a, b) { return b.min - a.min })
+
+  var hold = normalizeHexColor(isPlainObject(raw["hold"]) ? raw["hold"]["color"] : raw["hold"])
+  if (tiers.length === 0 && !hold) return null
+  return { tiers: tiers, hold: hold }
+}
+
+// `hold` outranks the tiers: a held charge is pinned and says nothing useful.
+function batteryColorFor(rules, percent, holdActive) {
+  if (!rules) return ""
+  if (holdActive && rules.hold) return rules.hold
+  if (!isFinite(percent) || percent < 0) return ""
+  for (var i = 0; i < rules.tiers.length; i++) {
+    if (percent >= rules.tiers[i].min) return rules.tiers[i].color
+  }
+  return ""
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     isDrawnSlot: isDrawnSlot,
@@ -226,6 +301,12 @@ if (typeof module !== "undefined") {
     expandPath: expandPath,
     customModuleSafeName: customModuleSafeName,
     customModuleType: customModuleType,
-    customModulePath: customModulePath
+    customModulePath: customModulePath,
+    batteryFraction: batteryFraction,
+    chargeThresholdActive: chargeThresholdActive,
+    normalizeHexColor: normalizeHexColor,
+    batteryTier: batteryTier,
+    batteryColorRules: batteryColorRules,
+    batteryColorFor: batteryColorFor
   }
 }

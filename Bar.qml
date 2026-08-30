@@ -2,6 +2,7 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
+import Quickshell.Services.UPower
 import QtQuick
 import QtQuick.Layouts
 import qs.Commons
@@ -497,6 +498,9 @@ Item {
       for (var s = 0; s < moduleSlots.length; s++) {
         var slot = moduleSlots[s]
         if (!slot || slot.region !== change.region || slot.moduleName !== entryId(change.entry)) continue
+        // `entry` is bound to a plain JS array element, which cannot notify:
+        // without this reassignment a color-only edit never reaches the slot.
+        slot.entry = change.entry
         var item = slot.activeItem
         if (item && "settings" in item) item.settings = settings
       }
@@ -654,6 +658,30 @@ Item {
     return BarModel.entrySettings(entry)
   }
 
+  // Bindings, so a charge change invalidates entryColor and repaints on its own.
+  readonly property int batteryPercent: {
+    var device = UPower.displayDevice
+    return device && device.isPresent
+      ? Math.round(BarModel.batteryFraction(device) * 100)
+      : -1
+  }
+  readonly property bool batteryHold: {
+    return BarModel.chargeThresholdActive(UPower.displayDevice, UPower.onBattery, {
+      Charging: UPowerDeviceState.Charging,
+      Discharging: UPowerDeviceState.Discharging,
+      FullyCharged: UPowerDeviceState.FullyCharged,
+      PendingCharge: UPowerDeviceState.PendingCharge
+    })
+  }
+
+  // Per-element "batteryColors", e.g. { "high": { "min": 80, "color": "#a6e3a1" },
+  // "hold": "#e0af68" }. Empty when unset, unparseable, or there is no battery.
+  function entryBatteryColorOf(entry) {
+    var rules = BarModel.batteryColorRules(entry)
+    if (!rules) return ""
+    return BarModel.batteryColorFor(rules, batteryPercent, batteryHold)
+  }
+
   // Per-element "color", e.g. { "id": "omarchy.power", "color": "#ff6b6b" }.
   // Util.normalizeLayoutEntry() deep-clones entries, so it survives untouched.
   function entryColorOf(entry) {
@@ -669,7 +697,13 @@ Item {
       var list = layout[sections[s]] || []
       for (var i = 0; i < list.length; i++) {
         var e = list[i]
-        if (!e || typeof e.color !== "string") continue
+        if (!e) continue
+        if (e.batteryColors !== undefined && BarModel.batteryColorRules(e) === null) {
+          console.warn("bar: ignoring batteryColors on widget " + JSON.stringify(entryId(e))
+            + " -- expected tiers \"high\"/\"medium\"/\"low\"/\"hold\" holding"
+            + " \"#RGB\", \"#RRGGBB\", or { \"min\": <0-100>, \"color\": \"#RRGGBB\" }")
+        }
+        if (typeof e.color !== "string") continue
         if (entryColorOf(e) === "") {
           console.warn("bar: ignoring invalid color " + JSON.stringify(e.color)
             + " on widget " + JSON.stringify(entryId(e))
@@ -1705,7 +1739,8 @@ Item {
     property string region: ""
     readonly property string moduleName: root.entryId(entry)
     readonly property var moduleSettings: root.entrySettings(entry)
-    readonly property string entryColor: root.entryColorOf(entry)
+    // batteryColors wins; without one this is the static color.
+    readonly property string entryColor: root.entryBatteryColorOf(entry) || root.entryColorOf(entry)
     readonly property string customType: root.customModuleType(entry)
     // Re-evaluate when the registry mutates (Component reference changes,
     // plugin enabled/disabled, etc.). Reading the `widgets` property creates

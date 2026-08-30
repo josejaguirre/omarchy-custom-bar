@@ -1,8 +1,9 @@
 # Custom Bar
 
 An Omarchy bar cloned from `omarchy.bar` and extended with a **floating
-layout**, **transparency**, **Waybar-style per-widget pills** and **per-element
-colors** — all configurable from `~/.config/omarchy/shell.json`.
+layout**, **transparency**, **Waybar-style per-widget pills**, **per-element
+colors** and a **battery that colors itself by charge level** — all configurable
+from `~/.config/omarchy/shell.json`.
 
 ![Bar with pills, green workspaces, blue audio and red battery](screenshot.png)
 
@@ -70,7 +71,9 @@ Everything lives under the `bar:` key of `~/.config/omarchy/shell.json`.
     "layout": {
       "left":  [ { "id": "omarchy.workspaces", "color": "#a6e36b" } ],
       "right": [ { "id": "omarchy.audio", "color": "#6bcfff" },
-                 { "id": "omarchy.power", "color": "#ff6b6b" } ]
+                 { "id": "omarchy.power", "color": "#ff6b6b",
+                   "batteryColors": { "high": "#a6e36b", "medium": "#ffd782",
+                                      "low": "#ff6b6b", "hold": "#6bcfff" } } ]
     }
   }
 }
@@ -217,6 +220,49 @@ when you open a new workspace.
 
 ---
 
+## 4. Battery-driven color
+
+`omarchy.power` can take its color from the charge level. Add `batteryColors`:
+
+```json
+{
+  "id": "omarchy.power",
+  "color": "#ff6b6b",
+  "batteryColors": {
+    "high":   { "min": 80, "color": "#a6e36b" },
+    "medium": { "min": 30, "color": "#ffd782" },
+    "low":    { "color": "#ff6b6b" },
+    "hold":   "#6bcfff"
+  }
+}
+```
+
+| Tier | Default floor | Applies when |
+|------|---------------|--------------|
+| `high` | `80` | charge >= `min` |
+| `medium` | `30` | charge >= `min` |
+| `low` | `0` | everything below |
+| `hold` | -- | charger attached, firmware holding the charge |
+
+`min` is `0`-`100`. A bare `"#RRGGBB"` keeps the default floor, so the common
+case is four strings:
+
+```json
+"batteryColors": { "high": "#a6e36b", "medium": "#ffd782", "low": "#ff6b6b", "hold": "#6bcfff" }
+```
+
+`hold` outranks the tiers — a held charge is pinned and says nothing useful. It
+is what the power panel labels `Threshold`, the state that stops the icon
+filling at 80%. Omit it and a held battery uses its percentage tier.
+
+The highest matching floor wins, so out-of-order or overlapping tiers still
+resolve predictably.
+
+`color` is the fallback: no battery, a charge below every floor, or a malformed
+block. Tiers validate individually — one bad color is dropped, the rest apply.
+
+---
+
 ## Validation
 
 Colors accept `#RGB` and `#RRGGBB`. **Alpha is deliberately not accepted**:
@@ -229,6 +275,7 @@ fails silently or renders the bar black:
 bar: ignoring invalid background "rojo" -- expected "#RGB" or "#RRGGBB"; using the theme color
 bar: ignoring invalid color "#zzz" on widget "omarchy.clock" -- expected "#RGB" or "#RRGGBB"
 bar: ignoring pillForeground -- it only applies with pillBackground set; leaving the automatic light/dark text color in charge
+bar: ignoring batteryColors on widget "omarchy.power" -- expected tiers "high"/"medium"/"low"/"hold" holding "#RGB", "#RRGGBB", or { "min": <0-100>, "color": "#RRGGBB" }
 ```
 
 To watch them:
@@ -258,6 +305,16 @@ construction anyway. Upstream bug
 [PR #8146](https://github.com/basecamp/omarchy/pull/8146) via
 `Loader.initialProperties`. Once that ships in a stable release, `required` can
 be restored.
+
+**Editing `Bar.qml` needs `omarchy restart shell`.** `shell.json` hot-reloads, but an
+edit to the bar's own QML is not picked up: the shell logs `Local plugin changed,
+reloading: <id>` and keeps serving the version it already compiled. Verify bar code
+against a restarted shell or you are reading a stale bar.
+
+**`applySettingsDelta()` reassigns the slot's `entry`.** It patches entries in place
+rather than rebuilding, and `entry` is bound to a plain JS array element that cannot
+notify — so `entryColor` read the old entry and a color-only edit was swallowed.
+Affects plain `color` too; unnoticed because a color is rarely edited on its own.
 
 **Diffing against upstream** to pull in changes:
 
