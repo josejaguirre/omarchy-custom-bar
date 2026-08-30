@@ -74,8 +74,13 @@ Item {
   property color themeForeground: Color.bar.text
   property color themeContrastForeground: Color.background
   property color transparentForeground: Color.bar.text
-  property color foreground: themeForeground
-  property color barForeground: useTransparentForeground ? transparentForeground : themeForeground
+  // Both foregrounds honour widgetColor: most widgets read barForeground
+  // (via Ui/WidgetButton), but the tray reads `foreground` directly, so
+  // pinning only one would leave the tray icons on the old auto-contrast
+  // color while everything beside them changed.
+  property color foreground: widgetColorActive ? widgetColorValue : themeForeground
+  property color barForeground: widgetColorActive ? widgetColorValue
+    : (useTransparentForeground ? transparentForeground : themeForeground)
   property bool foregroundAnimationEnabled: true
   // Theme-driven bar background, tracking shell.toml's [bar] section.
   readonly property color themeBackground: Color.bar.background
@@ -86,6 +91,39 @@ Item {
   property string configuredBackground: ""
   property color background: configuredBackground !== "" ? configuredBackground : themeBackground
   property color urgent: Color.bar.active
+
+  // ---- Waybar-style per-widget pills ----
+  //
+  // Off by default: an empty widgetBackground means "draw no pill", which is
+  // the stock bar. Setting a color turns the whole feature on, so a single
+  // key is both the switch and the value.
+  property string widgetBackground: ""
+  readonly property bool widgetPills: widgetBackground !== ""
+  // Corner radius of each pill.
+  property real widgetPillRadius: 8
+  // Inner padding, applied along the bar's main axis only (horizontal on a
+  // top/bottom bar). The cross axis is governed by widgetMargin instead, so
+  // every pill ends up the same height regardless of what its widget draws.
+  property real widgetPadding: 8
+  // Gap between adjacent pills.
+  property real widgetSpacing: 6
+  // Gap between a pill's edge and the bar's edge on the cross axis. This is
+  // what gives every pill a uniform height (barSize - 2 * widgetMargin)
+  // instead of each one hugging its own content.
+  property real widgetMargin: 4
+  readonly property real widgetPillThickness: Math.max(0, root.barSize - 2 * widgetMargin)
+  // Foreground pinned by shell.json's `widgetColor`.
+  //
+  // Deliberately gated on widgetPills: the stock behaviour asks
+  // omarchy-bar-text-color to sample the wallpaper under the bar and picks
+  // light or dark text from its luminance. That is the right call for text
+  // sitting directly on the desktop, and the wrong one once the text sits on
+  // an opaque pill -- the sampled surface is no longer the surface behind
+  // the glyphs. So with no pill there is nothing to pin the color to, and
+  // widgetColor is ignored rather than silently defeating the auto-contrast.
+  property string widgetColor: ""
+  readonly property bool widgetColorActive: widgetPills && widgetColor !== ""
+  readonly property color widgetColorValue: widgetColor !== "" ? widgetColor : themeForeground
 
   // ---- shell.json `bar:` knobs: marginGap / cornerRadius / opacity ----
   //
@@ -421,6 +459,35 @@ Item {
       bg = ""
     }
     configuredBackground = bg
+
+    var wbg = typeof config.widgetBackground === "string" ? config.widgetBackground.trim() : ""
+    if (wbg !== "" && !/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(wbg)) {
+      console.warn("bar: ignoring invalid widgetBackground " + JSON.stringify(wbg)
+        + " -- expected \"#RGB\" or \"#RRGGBB\"; drawing no widget pills")
+      wbg = ""
+    }
+    widgetBackground = wbg
+    widgetPillRadius = typeof config.widgetRadius === "number"
+      ? Math.max(0, Math.min(100, config.widgetRadius)) : 8
+    widgetPadding = typeof config.widgetPadding === "number"
+      ? Math.max(0, Math.min(60, config.widgetPadding)) : 8
+    widgetSpacing = typeof config.widgetSpacing === "number"
+      ? Math.max(0, Math.min(60, config.widgetSpacing)) : 6
+    widgetMargin = typeof config.widgetMargin === "number"
+      ? Math.max(0, Math.min(60, config.widgetMargin)) : 4
+
+    var wfg = typeof config.widgetColor === "string" ? config.widgetColor.trim() : ""
+    if (wfg !== "" && !/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(wfg)) {
+      console.warn("bar: ignoring invalid widgetColor " + JSON.stringify(wfg)
+        + " -- expected \"#RGB\" or \"#RRGGBB\"; using the automatic text color")
+      wfg = ""
+    }
+    if (wfg !== "" && wbg === "") {
+      console.warn("bar: ignoring widgetColor -- it only applies with widgetBackground set;"
+        + " leaving the automatic light/dark text color in charge")
+      wfg = ""
+    }
+    widgetColor = wfg
 
     // layoutEntries feeds plain JS arrays to the module Repeaters, and QML
     // cannot diff those: reassigning layoutConfig rebuilds every widget on
@@ -1419,6 +1486,10 @@ Item {
           entries: root.entriesBefore(centerRoot.entries, root.centerAnchor)
           region: "center"
           anchors.right: centerAnchorModule.left
+          // The anchor module (usually the clock) is positioned by anchors,
+          // not by the Row above, so its two neighbours need the pill gap
+          // applied here or their pills would butt right up against it.
+          anchors.rightMargin: root.widgetPills ? root.widgetSpacing : 0
           anchors.verticalCenter: centerAnchorModule.verticalCenter
         }
 
@@ -1435,6 +1506,7 @@ Item {
           entries: root.entriesAfter(centerRoot.entries, root.centerAnchor)
           region: "center"
           anchors.left: centerAnchorModule.right
+          anchors.leftMargin: root.widgetPills ? root.widgetSpacing : 0
           anchors.verticalCenter: centerAnchorModule.verticalCenter
         }
       }
@@ -1464,6 +1536,7 @@ Item {
           entries: root.entriesBefore(centerRoot.entries, root.centerAnchor)
           region: "center"
           anchors.bottom: centerAnchorModule.top
+          anchors.bottomMargin: root.widgetPills ? root.widgetSpacing : 0
           anchors.horizontalCenter: centerAnchorModule.horizontalCenter
         }
 
@@ -1480,6 +1553,7 @@ Item {
           entries: root.entriesAfter(centerRoot.entries, root.centerAnchor)
           region: "center"
           anchors.top: centerAnchorModule.bottom
+          anchors.topMargin: root.widgetPills ? root.widgetSpacing : 0
           anchors.horizontalCenter: centerAnchorModule.horizontalCenter
         }
       }
@@ -1589,7 +1663,7 @@ Item {
       id: horizontalModuleList
 
       Row {
-        spacing: 0
+        spacing: root.widgetPills ? root.widgetSpacing : 0
 
         Repeater {
           model: moduleListRoot.entries
@@ -1607,7 +1681,7 @@ Item {
       id: verticalModuleList
 
       Column {
-        spacing: 0
+        spacing: root.widgetPills ? root.widgetSpacing : 0
 
         Repeater {
           model: moduleListRoot.entries
@@ -1660,8 +1734,18 @@ Item {
       if (hint !== undefined && hint !== null && hint > 0) return Math.round(hint)
       return Math.max(Style.space(10), Math.round((root.vertical ? slot.height : slot.width) * 0.55))
     }
-    implicitWidth: activeItem && activeItem.visible ? (root.vertical ? root.barSize : activeItem.implicitWidth) : 0
-    implicitHeight: activeItem && activeItem.visible ? activeItem.implicitHeight : 0
+    // Pills only exist for a slot that actually renders something; an empty
+    // or hidden module must keep collapsing to zero so it takes no space and
+    // leaves no floating pill behind.
+    readonly property bool pilled: root.widgetPills && activeItem !== null && activeItem.visible
+    // Padding runs along the bar's main axis only. The cross axis is set by
+    // widgetPillThickness below, so pills stay a uniform height.
+    readonly property real padAlong: pilled ? root.widgetPadding : 0
+
+    implicitWidth: activeItem && activeItem.visible
+      ? (root.vertical ? root.barSize : activeItem.implicitWidth + 2 * padAlong) : 0
+    implicitHeight: activeItem && activeItem.visible
+      ? activeItem.implicitHeight + (root.vertical ? 2 * padAlong : 0) : 0
     width: implicitWidth
     height: implicitHeight
     z: modulePointer.dragging ? 100 : 0
@@ -1673,6 +1757,25 @@ Item {
     }
 
     HoverHandler { id: moduleHover }
+
+    Rectangle {
+      id: widgetPill
+      visible: slot.pilled
+      // Behind the module's own content, which follows as plain siblings.
+      z: -1
+      anchors.centerIn: parent
+      // Along the bar the pill matches the slot (content + padding); across
+      // it the pill ignores the slot and takes a fixed thickness, so a tall
+      // widget and a short one still produce the same pill. Overflowing the
+      // slot on that axis is intentional and harmless: it is centred, and
+      // the slot never clips.
+      width: root.vertical ? root.widgetPillThickness : parent.width
+      height: root.vertical ? parent.height : root.widgetPillThickness
+      radius: root.widgetPillRadius
+      color: root.widgetBackground
+      Behavior on color { ColorAnimation { duration: 420; easing.type: Easing.InOutCubic } }
+      Behavior on radius { NumberAnimation { duration: 420; easing.type: Easing.InOutCubic } }
+    }
 
     BorderSurface {
       visible: slot.dragSource
@@ -1689,6 +1792,10 @@ Item {
       active: !slot.qmlCustom && !slot.registered
       sourceComponent: slot.commandCustom ? customCommandModuleComponent : emptyModuleComponent
       anchors.fill: parent
+      anchors.leftMargin: root.vertical ? 0 : slot.padAlong
+      anchors.rightMargin: root.vertical ? 0 : slot.padAlong
+      anchors.topMargin: root.vertical ? slot.padAlong : 0
+      anchors.bottomMargin: root.vertical ? slot.padAlong : 0
       opacity: slot.dragSource ? 0.22 : 1.0
       onLoaded: {
         slot.injectProps()
@@ -1701,6 +1808,10 @@ Item {
       active: slot.registered
       sourceComponent: slot.registered ? slot.registryComponent : null
       anchors.fill: parent
+      anchors.leftMargin: root.vertical ? 0 : slot.padAlong
+      anchors.rightMargin: root.vertical ? 0 : slot.padAlong
+      anchors.topMargin: root.vertical ? slot.padAlong : 0
+      anchors.bottomMargin: root.vertical ? slot.padAlong : 0
       opacity: slot.dragSource ? 0.22 : 1.0
       onLoaded: {
         slot.injectProps()
@@ -1713,6 +1824,10 @@ Item {
       active: slot.qmlCustom
       source: slot.qmlCustom ? root.customModuleSource(slot.entry) : ""
       anchors.fill: parent
+      anchors.leftMargin: root.vertical ? 0 : slot.padAlong
+      anchors.rightMargin: root.vertical ? 0 : slot.padAlong
+      anchors.topMargin: root.vertical ? slot.padAlong : 0
+      anchors.bottomMargin: root.vertical ? slot.padAlong : 0
       opacity: slot.dragSource ? 0.22 : 1.0
       onLoaded: {
         slot.injectProps()
