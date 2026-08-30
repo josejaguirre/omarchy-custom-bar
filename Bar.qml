@@ -124,6 +124,12 @@ Item {
   property string widgetColor: ""
   readonly property bool widgetColorActive: widgetPills && widgetColor !== ""
   readonly property color widgetColorValue: widgetColor !== "" ? widgetColor : themeForeground
+  // Inset between the bar's edge and the first/last widget, along the bar's
+  // main axis. Expressed in pre-scale units and fed through Style.space(),
+  // like the hardcoded 8 it replaces, so it keeps following the theme's
+  // [spacing] scale and font scale instead of freezing at raw pixels.
+  // 8 reproduces the stock bar exactly.
+  property real contentPadding: 8
 
   // ---- shell.json `bar:` knobs: marginGap / cornerRadius / opacity ----
   //
@@ -407,7 +413,27 @@ Item {
   }
 
   readonly property bool vertical: position === "left" || position === "right"
-  readonly property int barSize: vertical ? Style.bar.sizeVertical : Style.bar.sizeHorizontal
+  // Bar thickness, in REAL pixels, from shell.json's `sizeHorizontal` /
+  // `sizeVertical`. -1 means "not set": fall back to Style.bar.*, i.e.
+  // shell.toml's [bar] size-horizontal / size-vertical, so removing these
+  // keys restores the stock behaviour exactly.
+  //
+  // Note these are NOT the same unit as the shell.toml keys they shadow:
+  // Style.barToken() multiplies those by fontScale (= [font] base-size / 12),
+  // which is why a toml `size-horizontal = 35` renders a 32px bar at
+  // base-size 11. These are taken literally -- 40 means 40px -- so the bar
+  // stops moving when the font size changes.
+  property int configuredSizeHorizontal: -1
+  property int configuredSizeVertical: -1
+  readonly property int barSize: vertical
+    ? (configuredSizeVertical > 0 ? configuredSizeVertical : Style.bar.sizeVertical)
+    : (configuredSizeHorizontal > 0 ? configuredSizeHorizontal : Style.bar.sizeHorizontal)
+
+  // The auto-contrast probe samples a strip of wallpaper as tall as the bar,
+  // so a resize has to re-run it -- otherwise the text colour keeps being
+  // the answer for the bar's previous height. Static before these keys
+  // existed, hence no handler until now.
+  onBarSizeChanged: scheduleTransparentForegroundRefresh()
 
   function normalizePosition(value) {
     return BarModel.normalizePosition(value)
@@ -488,6 +514,16 @@ Item {
       wfg = ""
     }
     widgetColor = wfg
+
+    contentPadding = typeof config.contentPadding === "number"
+      ? Math.max(0, Math.min(100, config.contentPadding)) : 8
+
+    // Floor of 8px: a bar thinner than that has no room for a glyph and
+    // would just be an invisible strip that still steals an exclusion zone.
+    configuredSizeHorizontal = typeof config.sizeHorizontal === "number"
+      ? Math.max(8, Math.min(400, Math.round(config.sizeHorizontal))) : -1
+    configuredSizeVertical = typeof config.sizeVertical === "number"
+      ? Math.max(8, Math.min(400, Math.round(config.sizeVertical))) : -1
 
     // layoutEntries feeds plain JS arrays to the module Repeaters, and QML
     // cannot diff those: reassigning layoutConfig rebuilds every widget on
@@ -1276,13 +1312,13 @@ Item {
 
         LeftModules {
           anchors.left: parent.left
-          anchors.leftMargin: Style.space(8)
+          anchors.leftMargin: Style.space(root.contentPadding)
           anchors.verticalCenter: parent.verticalCenter
         }
 
         RightModules {
           anchors.right: parent.right
-          anchors.rightMargin: Style.space(8)
+          anchors.rightMargin: Style.space(root.contentPadding)
           anchors.verticalCenter: parent.verticalCenter
         }
       }
@@ -1298,13 +1334,13 @@ Item {
 
         LeftModules {
           anchors.top: parent.top
-          anchors.topMargin: Style.space(8)
+          anchors.topMargin: Style.space(root.contentPadding)
           anchors.horizontalCenter: parent.horizontalCenter
         }
 
         RightModules {
           anchors.bottom: parent.bottom
-          anchors.bottomMargin: Style.space(8)
+          anchors.bottomMargin: Style.space(root.contentPadding)
           anchors.horizontalCenter: parent.horizontalCenter
         }
       }
