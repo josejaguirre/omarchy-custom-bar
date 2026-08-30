@@ -530,6 +530,7 @@ Item {
     // every monitor. When a shell.json write only changed inline widget
     // settings, patch the live layout and running widgets in place instead.
     var next = normalizeLayout(config.layout)
+    warnInvalidEntryColors(next)
     var delta = BarModel.inlineSettingsDelta(layoutConfig, next)
     if (delta) {
       applySettingsDelta(delta)
@@ -702,6 +703,35 @@ Item {
 
   function entrySettings(entry) {
     return BarModel.entrySettings(entry)
+  }
+
+  // Per-element "color" from a layout entry, e.g.
+  //   { "id": "omarchy.power", "color": "#ff6b6b" }
+  // Util.normalizeLayoutEntry() deep-clones entries rather than picking known
+  // keys, so an unrecognised "color" survives normalization untouched and can
+  // simply be read back here.
+  function entryColorOf(entry) {
+    if (!entry || typeof entry.color !== "string") return ""
+    var c = entry.color.replace(/^\s+|\s+$/g, "")
+    return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(c) ? c : ""
+  }
+
+  // Warn once per config load rather than from the slots' bindings, which
+  // re-evaluate and would repeat the same message on every layout change.
+  function warnInvalidEntryColors(layout) {
+    var sections = ["left", "center", "right"]
+    for (var s = 0; s < sections.length; s++) {
+      var list = layout[sections[s]] || []
+      for (var i = 0; i < list.length; i++) {
+        var e = list[i]
+        if (!e || typeof e.color !== "string") continue
+        if (entryColorOf(e) === "") {
+          console.warn("bar: ignoring invalid color " + JSON.stringify(e.color)
+            + " on widget " + JSON.stringify(entryId(e))
+            + " -- expected \"#RGB\" or \"#RRGGBB\"")
+        }
+      }
+    }
   }
 
   function entryId(entry) {
@@ -1739,6 +1769,7 @@ Item {
     property string region: ""
     readonly property string moduleName: root.entryId(entry)
     readonly property var moduleSettings: root.entrySettings(entry)
+    readonly property string entryColor: root.entryColorOf(entry)
     readonly property string customType: root.customModuleType(entry)
     // Re-evaluate when the registry mutates (Component reference changes,
     // plugin enabled/disabled, etc.). Reading the `widgets` property creates
@@ -2002,7 +2033,66 @@ Item {
       if ("bar" in target) target.bar = root
       if ("moduleName" in target) target.moduleName = moduleName
       if ("settings" in target) target.settings = moduleSettings
+      applyEntryColor()
     }
+
+    // Per-widget colour.
+    //
+    // Widgets do not expose a colour of their own: they read bar.barForeground
+    // through Ui/WidgetButton, a single value shared by the whole bar. Two
+    // other routes were considered and rejected:
+    //
+    //   - Handing the slot a stand-in `bar` object with a different
+    //     barForeground. Widgets touch ~19 members of the host (run, shell,
+    //     showTooltip, iconSlot, moduleWidgets, ...) and a third-party widget
+    //     may touch anything else, so a stand-in silently breaks whatever it
+    //     forgot to mirror.
+    //   - Recolouring the rendered slot with a MultiEffect. Universal, but it
+    //     repaints every pixel -- it would flatten the tray's full-colour
+    //     application icons and the workspace urgent/active colours along with
+    //     the text.
+    //
+    // So instead we walk the slot's item tree and assign `foreground`, the one
+    // property WidgetButton derives its text and icon colour from. Anything
+    // that paints itself some other way is left alone by construction.
+    property var paintedItems: []
+
+    function applyEntryColor() {
+      // Restore first: an item that dropped out of the tree, or that is no
+      // longer covered by an override, has to get its binding back before the
+      // new pass runs, or it would keep a stale colour forever.
+      for (var i = 0; i < paintedItems.length; i++) {
+        var prev = paintedItems[i]
+        if (prev) prev.foreground = Qt.binding(function() { return root.barForeground })
+      }
+      paintedItems = []
+      if (entryColor === "" || !activeItem) return
+      var painted = []
+      paintForeground(activeItem, entryColor, painted, 0)
+      paintedItems = painted
+    }
+
+    // Depth cap: a widget tree is a handful of levels deep, and a malformed
+    // or cyclic one must not take the whole shell down with it.
+    function paintForeground(item, color, painted, depth) {
+      if (!item || depth > 12) return
+      if ("foreground" in item) {
+        item.foreground = color
+        painted.push(item)
+      }
+      var kids = item.children
+      if (!kids) return
+      for (var i = 0; i < kids.length; i++) paintForeground(kids[i], color, painted, depth + 1)
+    }
+
+    onEntryColorChanged: applyEntryColor()
+
+    // Widgets whose children arrive later -- Workspaces builds its buttons in
+    // a Repeater, so a new workspace is a new WidgetButton that never saw the
+    // pass above. Any such change moves the slot's implicit size, which makes
+    // this a cheap and reliable place to re-apply.
+    onImplicitWidthChanged: if (entryColor !== "") Qt.callLater(applyEntryColor)
+    onImplicitHeightChanged: if (entryColor !== "") Qt.callLater(applyEntryColor)
 
     Component {
       id: customCommandModuleComponent
