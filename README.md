@@ -12,6 +12,37 @@ README at `/usr/share/omarchy/shell/plugins/bar/README.md`.
 
 ---
 
+## Install
+
+```bash
+omarchy plugin add https://github.com/<user>/<repo>.git --enable
+```
+
+`--enable` switches the shell over immediately. It installs into
+`~/.config/omarchy/plugins/josejaguirre.bar/` — the directory is named after the
+manifest `id`, not the repo.
+
+A bar **replaces** the bar in use rather than taking a slot in one, so
+`omarchy plugin enable/disable` is not how you toggle it. Switch between bars
+with:
+
+```bash
+omarchy bar use josejaguirre.bar   # this bar
+omarchy bar use omarchy.bar        # back to stock, still installed
+```
+
+Same thing by hand — set `id` on the bar's own entry in
+`~/.config/omarchy/shell.json`:
+
+```json
+"bar": { "id": "josejaguirre.bar" }
+```
+
+Remove it with `omarchy plugin remove josejaguirre.bar`, and pull updates with
+`omarchy plugin update josejaguirre.bar`.
+
+---
+
 ## Quick start
 
 Everything lives under the `bar:` key of `~/.config/omarchy/shell.json`.
