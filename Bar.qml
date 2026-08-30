@@ -74,10 +74,8 @@ Item {
   property color themeForeground: Color.bar.text
   property color themeContrastForeground: Color.background
   property color transparentForeground: Color.bar.text
-  // Both foregrounds honour pillForeground: most widgets read barForeground
-  // (via Ui/WidgetButton), but the tray reads `foreground` directly, so
-  // pinning only one would leave the tray icons on the old auto-contrast
-  // color while everything beside them changed.
+  // Both: most widgets read barForeground via Ui/WidgetButton, but the tray
+  // reads `foreground` directly.
   property color foreground: pillForegroundActive ? pillForegroundValue : themeForeground
   property color barForeground: pillForegroundActive ? pillForegroundValue
     : (useTransparentForeground ? transparentForeground : themeForeground)
@@ -92,67 +90,32 @@ Item {
   property color background: configuredBackground !== "" ? configuredBackground : themeBackground
   property color urgent: Color.bar.active
 
-  // ---- Waybar-style per-widget pills ----
-  //
-  // Off by default: an empty pillBackground means "draw no pill", which is
-  // the stock bar. Setting a color turns the whole feature on, so a single
-  // key is both the switch and the value.
+  // Waybar-style pills. pillBackground is the switch: no color, no pills.
   property string pillBackground: ""
   readonly property bool pillsEnabled: pillBackground !== ""
-  // Corner radius of each pill.
   property real pillRadius: 8
-  // Inner padding, applied along the bar's main axis only (horizontal on a
-  // top/bottom bar). The cross axis is governed by pillMargin instead, so
-  // every pill ends up the same height regardless of what its widget draws.
+  // Main axis only; pillMargin drives the cross axis, so every pill is the
+  // same height whatever its widget draws.
   property real pillPadding: 8
-  // Gap between adjacent pills.
   property real pillSpacing: 6
-  // Gap between a pill's edge and the bar's edge on the cross axis. This is
-  // what gives every pill a uniform height (barSize - 2 * pillMargin)
-  // instead of each one hugging its own content.
   property real pillMargin: 4
   readonly property real pillThickness: Math.max(0, root.barSize - 2 * pillMargin)
-  // Foreground pinned by shell.json's `pillForeground`.
-  //
-  // Deliberately gated on pillsEnabled: the stock behaviour asks
-  // omarchy-bar-text-color to sample the wallpaper under the bar and picks
-  // light or dark text from its luminance. That is the right call for text
-  // sitting directly on the desktop, and the wrong one once the text sits on
-  // an opaque pill -- the sampled surface is no longer the surface behind
-  // the glyphs. So with no pill there is nothing to pin the color to, and
-  // pillForeground is ignored rather than silently defeating the auto-contrast.
+  // Gated on pillsEnabled: the stock auto-contrast samples the wallpaper under
+  // the bar, the wrong surface once the text sits on an opaque pill.
   property string pillForeground: ""
   readonly property bool pillForegroundActive: pillsEnabled && pillForeground !== ""
   readonly property color pillForegroundValue: pillForeground !== "" ? pillForeground : themeForeground
-  // Inset between the bar's edge and the first/last widget, along the bar's
-  // main axis. Expressed in pre-scale units and fed through Style.space(),
-  // like the hardcoded 8 it replaces, so it keeps following the theme's
-  // [spacing] scale and font scale instead of freezing at raw pixels.
-  // 8 reproduces the stock bar exactly.
+  // Pre-scale units through Style.space(), like the hardcoded 8 it replaces.
   property real contentPadding: 8
 
-  // ---- shell.json `bar:` knobs: marginGap / cornerRadius / opacity ----
-  //
-  // All three are clamped in applyBarConfig(): shell.json is hand-edited and
-  // these feed straight into layer-shell margins, a Rectangle radius and an
-  // alpha, so a stray extra zero should not push the bar off-screen or into
-  // a degenerate shape.
-
-  // Gap (px) between the bar surface and the screen edges it floats away
-  // from. 0 (the default) keeps the stock flush-to-edge bar.
   property real marginGap: 0
-  // Corner radius (px) of the bar. -1 means "unset": fall back to
-  // Style.cornerRadius, which mirrors Hyprland's decoration:rounding live,
-  // so the bar matches whatever rounding the windows are using.
+  // -1 means unset: fall back to Style.cornerRadius, which mirrors Hyprland's
+  // decoration:rounding live.
   property real configuredCornerRadius: -1
   readonly property real barCornerRadius: configuredCornerRadius >= 0 ? configuredCornerRadius : Style.cornerRadius
-  // A rounded bar flush against the screen edge looks like a rendering bug,
-  // so squaring off when there is no gap is the sane default. Set
-  // "roundWhenFlush": true in shell.json to keep the radius regardless.
+  // A rounded bar flush against the screen edge reads as a rendering bug.
   property bool roundWhenFlush: false
   readonly property real effectiveCornerRadius: (marginGap <= 0 && !roundWhenFlush) ? 0 : barCornerRadius
-  // Background alpha, 0..1. Independent of the existing `transparent` flag:
-  // `transparent: true` still means "draw no background at all" and wins.
   property real barOpacity: 1
 
   Behavior on marginGap { NumberAnimation { duration: 420; easing.type: Easing.InOutCubic } }
@@ -413,26 +376,17 @@ Item {
   }
 
   readonly property bool vertical: position === "left" || position === "right"
-  // Bar thickness, in REAL pixels, from shell.json's `sizeHorizontal` /
-  // `sizeVertical`. -1 means "not set": fall back to Style.bar.*, i.e.
-  // shell.toml's [bar] size-horizontal / size-vertical, so removing these
-  // keys restores the stock behaviour exactly.
-  //
-  // Note these are NOT the same unit as the shell.toml keys they shadow:
-  // Style.barToken() multiplies those by fontScale (= [font] base-size / 12),
-  // which is why a toml `size-horizontal = 35` renders a 32px bar at
-  // base-size 11. These are taken literally -- 40 means 40px -- so the bar
-  // stops moving when the font size changes.
+  // Real pixels -- NOT the unit of the shell.toml keys these shadow, which
+  // Style.barToken() multiplies by fontScale (= [font] base-size / 12). -1
+  // falls back to Style.bar.*, restoring the stock behaviour.
   property int configuredSizeHorizontal: -1
   property int configuredSizeVertical: -1
   readonly property int barSize: vertical
     ? (configuredSizeVertical > 0 ? configuredSizeVertical : Style.bar.sizeVertical)
     : (configuredSizeHorizontal > 0 ? configuredSizeHorizontal : Style.bar.sizeHorizontal)
 
-  // The auto-contrast probe samples a strip of wallpaper as tall as the bar,
-  // so a resize has to re-run it -- otherwise the text colour keeps being
-  // the answer for the bar's previous height. Static before these keys
-  // existed, hence no handler until now.
+  // The auto-contrast probe samples a strip as tall as the bar, so a resize
+  // has to re-run it.
   onBarSizeChanged: scheduleTransparentForegroundRefresh()
 
   function normalizePosition(value) {
@@ -473,11 +427,8 @@ Item {
       ? Math.max(0, Math.min(1, config.opacity)) : 1
     roundWhenFlush = config.roundWhenFlush === true
 
-    // Only #RGB and #RRGGBB are accepted. Alpha is deliberately not parsed
-    // here: `opacity` above is the single place that owns the bar's alpha,
-    // so a hex value can never fight it. Anything malformed is reported and
-    // then ignored, falling back to the theme rather than handing QML a bad
-    // string (which would silently render black).
+    // Alpha is deliberately not parsed: `opacity` is the single owner of it,
+    // so a hex value can never fight it.
     var bg = typeof config.background === "string" ? config.background.trim() : ""
     if (bg !== "" && !/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(bg)) {
       console.warn("bar: ignoring invalid background " + JSON.stringify(bg)
@@ -518,8 +469,6 @@ Item {
     contentPadding = typeof config.contentPadding === "number"
       ? Math.max(0, Math.min(100, config.contentPadding)) : 8
 
-    // Floor of 8px: a bar thinner than that has no room for a glyph and
-    // would just be an invisible strip that still steals an exclusion zone.
     configuredSizeHorizontal = typeof config.sizeHorizontal === "number"
       ? Math.max(8, Math.min(400, Math.round(config.sizeHorizontal))) : -1
     configuredSizeVertical = typeof config.sizeVertical === "number"
@@ -705,19 +654,15 @@ Item {
     return BarModel.entrySettings(entry)
   }
 
-  // Per-element "color" from a layout entry, e.g.
-  //   { "id": "omarchy.power", "color": "#ff6b6b" }
-  // Util.normalizeLayoutEntry() deep-clones entries rather than picking known
-  // keys, so an unrecognised "color" survives normalization untouched and can
-  // simply be read back here.
+  // Per-element "color", e.g. { "id": "omarchy.power", "color": "#ff6b6b" }.
+  // Util.normalizeLayoutEntry() deep-clones entries, so it survives untouched.
   function entryColorOf(entry) {
     if (!entry || typeof entry.color !== "string") return ""
     var c = entry.color.replace(/^\s+|\s+$/g, "")
     return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(c) ? c : ""
   }
 
-  // Warn once per config load rather than from the slots' bindings, which
-  // re-evaluate and would repeat the same message on every layout change.
+  // Once per config load, not from the slots' bindings, which re-evaluate.
   function warnInvalidEntryColors(layout) {
     var sections = ["left", "center", "right"]
     for (var s = 0; s < sections.length; s++) {
@@ -1198,11 +1143,8 @@ Item {
       window: barWindow
     }
 
-    // The edge the bar is anchored to and the two perpendicular edges get
-    // marginGap -- those border open desktop or screen edge. The edge
-    // opposite `position` gets none: that side faces the tiled windows,
-    // which already keep their own Hyprland gap against the bar's exclusion
-    // zone, so adding marginGap there too makes that side look wider.
+    // No gap on the inner edge: that side faces the tiled windows, which
+    // already keep their own Hyprland gap against the exclusion zone.
     function innerEdge() {
       if (root.position === "top") return "bottom"
       if (root.position === "bottom") return "top"
@@ -1229,10 +1171,8 @@ Item {
 
     implicitWidth: root.vertical ? root.barSize : 0
     implicitHeight: root.vertical ? 0 : root.barSize
-    // The surface itself stays fully transparent; barBackground below draws
-    // the actual fill, so the area outside the corner radius shows the
-    // desktop through instead of leaving a square window behind the round
-    // shape.
+    // barBackground below draws the fill, so the area outside the corner
+    // radius shows the desktop instead of a square window.
     color: "transparent"
     surfaceFormat.opaque: false
     WlrLayershell.namespace: "omarchy-bar"
@@ -1242,12 +1182,9 @@ Item {
       id: barBackground
       anchors.fill: parent
       radius: root.effectiveCornerRadius
-      // The theme color can carry its own baked-in alpha (shell.toml's
-      // [bar] background-alpha). Forcing alpha to 1 here makes barOpacity an
-      // absolute result rather than a multiplier on an already-translucent
-      // color, so opacity: 1 is reliably fully opaque.
+      // Alpha forced to 1 first: the theme color can carry its own baked-in
+      // alpha, and barOpacity must be an absolute result, not a multiplier.
       color: root.transparent ? "transparent" : Qt.rgba(root.background.r, root.background.g, root.background.b, 1)
-      // `transparent: true` means "no background at all" and takes priority.
       opacity: root.transparent ? 1 : root.barOpacity
       Behavior on radius { NumberAnimation { duration: 420; easing.type: Easing.InOutCubic } }
       Behavior on color { ColorAnimation { duration: 420; easing.type: Easing.InOutCubic } }
@@ -1552,9 +1489,8 @@ Item {
           entries: root.entriesBefore(centerRoot.entries, root.centerAnchor)
           region: "center"
           anchors.right: centerAnchorModule.left
-          // The anchor module (usually the clock) is positioned by anchors,
-          // not by the Row above, so its two neighbours need the pill gap
-          // applied here or their pills would butt right up against it.
+          // The anchor module is positioned by anchors, not by the Row, so
+          // its neighbours need the pill gap applied here.
           anchors.rightMargin: root.pillsEnabled ? root.pillSpacing : 0
           anchors.verticalCenter: centerAnchorModule.verticalCenter
         }
@@ -1804,25 +1740,17 @@ Item {
     // Pills only exist for a slot that actually renders something; an empty
     // or hidden module must keep collapsing to zero so it takes no space and
     // leaves no floating pill behind.
-    // What the widget asks for along the bar, before our padding.
     readonly property real contentExtent: activeItem && activeItem.visible
       ? Math.max(0, root.vertical ? activeItem.implicitHeight : activeItem.implicitWidth)
       : 0
-    // A widget can hold space while drawing nothing, and those must not get a
-    // pill -- nor the padding that would make an empty one visible:
-    //   - Indicators collapses to zero extent while no indicator is active,
-    //     and only expands on hover (revealInactiveIndicators).
-    //   - Spacer is deliberately blank but reports a real span.
-    //   - WidgetButton.keepSpace reserves room for an empty label.
-    // Without this the padding alone gave a zero-width widget a 2 * padding
-    // pill: an empty capsule that appeared and vanished under the pointer.
+    // Widgets can hold space while drawing nothing (Indicators before hover,
+    // Spacer, WidgetButton.keepSpace). Without this the padding alone gave
+    // them a 2 * padding pill: an empty capsule.
     readonly property bool hasContent: contentExtent > 0
       && moduleName !== "omarchy.spacer"
       && !(activeItem && "hasVisualContent" in activeItem
            && activeItem.hasVisualContent === false)
     readonly property bool pilled: root.pillsEnabled && hasContent
-    // Padding runs along the bar's main axis only. The cross axis is set by
-    // pillThickness below, so pills stay a uniform height.
     readonly property real padAlong: pilled ? root.pillPadding : 0
 
     implicitWidth: activeItem && activeItem.visible
@@ -1847,11 +1775,8 @@ Item {
       // Behind the module's own content, which follows as plain siblings.
       z: -1
       anchors.centerIn: parent
-      // Along the bar the pill matches the slot (content + padding); across
-      // it the pill ignores the slot and takes a fixed thickness, so a tall
-      // widget and a short one still produce the same pill. Overflowing the
-      // slot on that axis is intentional and harmless: it is centred, and
-      // the slot never clips.
+      // Fixed thickness across the bar, so tall and short widgets produce the
+      // same pill. Overflowing the slot on that axis is centred and harmless.
       width: root.vertical ? root.pillThickness : parent.width
       height: root.vertical ? parent.height : root.pillThickness
       radius: root.pillRadius
@@ -2050,37 +1975,21 @@ Item {
       if ("moduleName" in target) target.moduleName = moduleName
       if ("settings" in target) target.settings = moduleSettings
       // Guarded: the host schedules injectProps through Qt.callLater, which
-      // captures the function itself, so it still runs after the slot starts
-      // being torn down -- at which point resolving another method on the
-      // dying object throws.
+      // captures the function, so it still runs while the slot is being torn
+      // down -- resolving another method on the dying object then throws.
       if (typeof applyEntryColor === "function") applyEntryColor()
     }
 
-    // Per-widget colour.
-    //
-    // Widgets do not expose a colour of their own: they read bar.barForeground
-    // through Ui/WidgetButton, a single value shared by the whole bar. Two
-    // other routes were considered and rejected:
-    //
-    //   - Handing the slot a stand-in `bar` object with a different
-    //     barForeground. Widgets touch ~19 members of the host (run, shell,
-    //     showTooltip, iconSlot, moduleWidgets, ...) and a third-party widget
-    //     may touch anything else, so a stand-in silently breaks whatever it
-    //     forgot to mirror.
-    //   - Recolouring the rendered slot with a MultiEffect. Universal, but it
-    //     repaints every pixel -- it would flatten the tray's full-colour
-    //     application icons and the workspace urgent/active colours along with
-    //     the text.
-    //
-    // So instead we walk the slot's item tree and assign `foreground`, the one
-    // property WidgetButton derives its text and icon colour from. Anything
-    // that paints itself some other way is left alone by construction.
+    // Widgets have no colour of their own: they read bar.barForeground, one
+    // value shared by the whole bar. So walk the slot's tree and assign
+    // `foreground`, the property WidgetButton derives its colour from --
+    // anything painted another way (tray icons, urgent states) is left alone.
+    // A stand-in `bar` object would have to mirror ~19 host members, and a
+    // MultiEffect would repaint every pixel including those.
     property var paintedItems: []
 
     function applyEntryColor() {
-      // Restore first: an item that dropped out of the tree, or that is no
-      // longer covered by an override, has to get its binding back before the
-      // new pass runs, or it would keep a stale colour forever.
+      // Restore first, or an item no longer covered keeps a stale colour.
       for (var i = 0; i < paintedItems.length; i++) {
         var prev = paintedItems[i]
         if (prev) prev.foreground = Qt.binding(function() { return root.barForeground })
@@ -2093,8 +2002,7 @@ Item {
       paintedItems = painted
     }
 
-    // Depth cap: a widget tree is a handful of levels deep, and a malformed
-    // or cyclic one must not take the whole shell down with it.
+    // Depth cap: a cyclic tree must not take the shell down with it.
     function paintForeground(item, color, painted, depth) {
       if (!item || depth > 12) return
       if ("foreground" in item) {
@@ -2108,14 +2016,10 @@ Item {
 
     onEntryColorChanged: applyEntryColor()
 
-    // Widgets whose children arrive later -- Workspaces builds its buttons in
-    // a Repeater, so a new workspace is a new WidgetButton that never saw the
-    // pass above. Any such change moves the slot's implicit size, which makes
-    // this a cheap and reliable place to re-apply.
-    // A Timer, not Qt.callLater: the timer is a child of the slot and dies
-    // with it, so a pending re-apply cannot outlive the object it targets.
-    // Qt.callLater keeps the captured function alive past destruction and
-    // then fails resolving the slot's own methods.
+    // Children that arrive later: Workspaces builds its buttons in a Repeater,
+    // and any such change moves the slot's implicit size. A Timer, not
+    // Qt.callLater -- it dies with the slot, so a pending re-apply cannot
+    // outlive its target.
     Timer {
       id: entryColorReapply
       interval: 0
