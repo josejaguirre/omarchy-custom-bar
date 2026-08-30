@@ -74,12 +74,12 @@ Item {
   property color themeForeground: Color.bar.text
   property color themeContrastForeground: Color.background
   property color transparentForeground: Color.bar.text
-  // Both foregrounds honour widgetColor: most widgets read barForeground
+  // Both foregrounds honour pillForeground: most widgets read barForeground
   // (via Ui/WidgetButton), but the tray reads `foreground` directly, so
   // pinning only one would leave the tray icons on the old auto-contrast
   // color while everything beside them changed.
-  property color foreground: widgetColorActive ? widgetColorValue : themeForeground
-  property color barForeground: widgetColorActive ? widgetColorValue
+  property color foreground: pillForegroundActive ? pillForegroundValue : themeForeground
+  property color barForeground: pillForegroundActive ? pillForegroundValue
     : (useTransparentForeground ? transparentForeground : themeForeground)
   property bool foregroundAnimationEnabled: true
   // Theme-driven bar background, tracking shell.toml's [bar] section.
@@ -94,36 +94,36 @@ Item {
 
   // ---- Waybar-style per-widget pills ----
   //
-  // Off by default: an empty widgetBackground means "draw no pill", which is
+  // Off by default: an empty pillBackground means "draw no pill", which is
   // the stock bar. Setting a color turns the whole feature on, so a single
   // key is both the switch and the value.
-  property string widgetBackground: ""
-  readonly property bool widgetPills: widgetBackground !== ""
+  property string pillBackground: ""
+  readonly property bool pillsEnabled: pillBackground !== ""
   // Corner radius of each pill.
-  property real widgetPillRadius: 8
+  property real pillRadius: 8
   // Inner padding, applied along the bar's main axis only (horizontal on a
-  // top/bottom bar). The cross axis is governed by widgetMargin instead, so
+  // top/bottom bar). The cross axis is governed by pillMargin instead, so
   // every pill ends up the same height regardless of what its widget draws.
-  property real widgetPadding: 8
+  property real pillPadding: 8
   // Gap between adjacent pills.
-  property real widgetSpacing: 6
+  property real pillSpacing: 6
   // Gap between a pill's edge and the bar's edge on the cross axis. This is
-  // what gives every pill a uniform height (barSize - 2 * widgetMargin)
+  // what gives every pill a uniform height (barSize - 2 * pillMargin)
   // instead of each one hugging its own content.
-  property real widgetMargin: 4
-  readonly property real widgetPillThickness: Math.max(0, root.barSize - 2 * widgetMargin)
-  // Foreground pinned by shell.json's `widgetColor`.
+  property real pillMargin: 4
+  readonly property real pillThickness: Math.max(0, root.barSize - 2 * pillMargin)
+  // Foreground pinned by shell.json's `pillForeground`.
   //
-  // Deliberately gated on widgetPills: the stock behaviour asks
+  // Deliberately gated on pillsEnabled: the stock behaviour asks
   // omarchy-bar-text-color to sample the wallpaper under the bar and picks
   // light or dark text from its luminance. That is the right call for text
   // sitting directly on the desktop, and the wrong one once the text sits on
   // an opaque pill -- the sampled surface is no longer the surface behind
   // the glyphs. So with no pill there is nothing to pin the color to, and
-  // widgetColor is ignored rather than silently defeating the auto-contrast.
-  property string widgetColor: ""
-  readonly property bool widgetColorActive: widgetPills && widgetColor !== ""
-  readonly property color widgetColorValue: widgetColor !== "" ? widgetColor : themeForeground
+  // pillForeground is ignored rather than silently defeating the auto-contrast.
+  property string pillForeground: ""
+  readonly property bool pillForegroundActive: pillsEnabled && pillForeground !== ""
+  readonly property color pillForegroundValue: pillForeground !== "" ? pillForeground : themeForeground
   // Inset between the bar's edge and the first/last widget, along the bar's
   // main axis. Expressed in pre-scale units and fed through Style.space(),
   // like the hardcoded 8 it replaces, so it keeps following the theme's
@@ -486,34 +486,34 @@ Item {
     }
     configuredBackground = bg
 
-    var wbg = typeof config.widgetBackground === "string" ? config.widgetBackground.trim() : ""
+    var wbg = typeof config.pillBackground === "string" ? config.pillBackground.trim() : ""
     if (wbg !== "" && !/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(wbg)) {
-      console.warn("bar: ignoring invalid widgetBackground " + JSON.stringify(wbg)
+      console.warn("bar: ignoring invalid pillBackground " + JSON.stringify(wbg)
         + " -- expected \"#RGB\" or \"#RRGGBB\"; drawing no widget pills")
       wbg = ""
     }
-    widgetBackground = wbg
-    widgetPillRadius = typeof config.widgetRadius === "number"
-      ? Math.max(0, Math.min(100, config.widgetRadius)) : 8
-    widgetPadding = typeof config.widgetPadding === "number"
-      ? Math.max(0, Math.min(60, config.widgetPadding)) : 8
-    widgetSpacing = typeof config.widgetSpacing === "number"
-      ? Math.max(0, Math.min(60, config.widgetSpacing)) : 6
-    widgetMargin = typeof config.widgetMargin === "number"
-      ? Math.max(0, Math.min(60, config.widgetMargin)) : 4
+    pillBackground = wbg
+    pillRadius = typeof config.pillRadius === "number"
+      ? Math.max(0, Math.min(100, config.pillRadius)) : 8
+    pillPadding = typeof config.pillPadding === "number"
+      ? Math.max(0, Math.min(60, config.pillPadding)) : 8
+    pillSpacing = typeof config.pillSpacing === "number"
+      ? Math.max(0, Math.min(60, config.pillSpacing)) : 6
+    pillMargin = typeof config.pillMargin === "number"
+      ? Math.max(0, Math.min(60, config.pillMargin)) : 4
 
-    var wfg = typeof config.widgetColor === "string" ? config.widgetColor.trim() : ""
+    var wfg = typeof config.pillForeground === "string" ? config.pillForeground.trim() : ""
     if (wfg !== "" && !/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(wfg)) {
-      console.warn("bar: ignoring invalid widgetColor " + JSON.stringify(wfg)
+      console.warn("bar: ignoring invalid pillForeground " + JSON.stringify(wfg)
         + " -- expected \"#RGB\" or \"#RRGGBB\"; using the automatic text color")
       wfg = ""
     }
     if (wfg !== "" && wbg === "") {
-      console.warn("bar: ignoring widgetColor -- it only applies with widgetBackground set;"
+      console.warn("bar: ignoring pillForeground -- it only applies with pillBackground set;"
         + " leaving the automatic light/dark text color in charge")
       wfg = ""
     }
-    widgetColor = wfg
+    pillForeground = wfg
 
     contentPadding = typeof config.contentPadding === "number"
       ? Math.max(0, Math.min(100, config.contentPadding)) : 8
@@ -1555,7 +1555,7 @@ Item {
           // The anchor module (usually the clock) is positioned by anchors,
           // not by the Row above, so its two neighbours need the pill gap
           // applied here or their pills would butt right up against it.
-          anchors.rightMargin: root.widgetPills ? root.widgetSpacing : 0
+          anchors.rightMargin: root.pillsEnabled ? root.pillSpacing : 0
           anchors.verticalCenter: centerAnchorModule.verticalCenter
         }
 
@@ -1572,7 +1572,7 @@ Item {
           entries: root.entriesAfter(centerRoot.entries, root.centerAnchor)
           region: "center"
           anchors.left: centerAnchorModule.right
-          anchors.leftMargin: root.widgetPills ? root.widgetSpacing : 0
+          anchors.leftMargin: root.pillsEnabled ? root.pillSpacing : 0
           anchors.verticalCenter: centerAnchorModule.verticalCenter
         }
       }
@@ -1602,7 +1602,7 @@ Item {
           entries: root.entriesBefore(centerRoot.entries, root.centerAnchor)
           region: "center"
           anchors.bottom: centerAnchorModule.top
-          anchors.bottomMargin: root.widgetPills ? root.widgetSpacing : 0
+          anchors.bottomMargin: root.pillsEnabled ? root.pillSpacing : 0
           anchors.horizontalCenter: centerAnchorModule.horizontalCenter
         }
 
@@ -1619,7 +1619,7 @@ Item {
           entries: root.entriesAfter(centerRoot.entries, root.centerAnchor)
           region: "center"
           anchors.top: centerAnchorModule.bottom
-          anchors.topMargin: root.widgetPills ? root.widgetSpacing : 0
+          anchors.topMargin: root.pillsEnabled ? root.pillSpacing : 0
           anchors.horizontalCenter: centerAnchorModule.horizontalCenter
         }
       }
@@ -1729,7 +1729,7 @@ Item {
       id: horizontalModuleList
 
       Row {
-        spacing: root.widgetPills ? root.widgetSpacing : 0
+        spacing: root.pillsEnabled ? root.pillSpacing : 0
 
         Repeater {
           model: moduleListRoot.entries
@@ -1747,7 +1747,7 @@ Item {
       id: verticalModuleList
 
       Column {
-        spacing: root.widgetPills ? root.widgetSpacing : 0
+        spacing: root.pillsEnabled ? root.pillSpacing : 0
 
         Repeater {
           model: moduleListRoot.entries
@@ -1804,15 +1804,31 @@ Item {
     // Pills only exist for a slot that actually renders something; an empty
     // or hidden module must keep collapsing to zero so it takes no space and
     // leaves no floating pill behind.
-    readonly property bool pilled: root.widgetPills && activeItem !== null && activeItem.visible
+    // What the widget asks for along the bar, before our padding.
+    readonly property real contentExtent: activeItem && activeItem.visible
+      ? Math.max(0, root.vertical ? activeItem.implicitHeight : activeItem.implicitWidth)
+      : 0
+    // A widget can hold space while drawing nothing, and those must not get a
+    // pill -- nor the padding that would make an empty one visible:
+    //   - Indicators collapses to zero extent while no indicator is active,
+    //     and only expands on hover (revealInactiveIndicators).
+    //   - Spacer is deliberately blank but reports a real span.
+    //   - WidgetButton.keepSpace reserves room for an empty label.
+    // Without this the padding alone gave a zero-width widget a 2 * padding
+    // pill: an empty capsule that appeared and vanished under the pointer.
+    readonly property bool hasContent: contentExtent > 0
+      && moduleName !== "omarchy.spacer"
+      && !(activeItem && "hasVisualContent" in activeItem
+           && activeItem.hasVisualContent === false)
+    readonly property bool pilled: root.pillsEnabled && hasContent
     // Padding runs along the bar's main axis only. The cross axis is set by
-    // widgetPillThickness below, so pills stay a uniform height.
-    readonly property real padAlong: pilled ? root.widgetPadding : 0
+    // pillThickness below, so pills stay a uniform height.
+    readonly property real padAlong: pilled ? root.pillPadding : 0
 
     implicitWidth: activeItem && activeItem.visible
-      ? (root.vertical ? root.barSize : activeItem.implicitWidth + 2 * padAlong) : 0
+      ? (root.vertical ? root.barSize : contentExtent + 2 * padAlong) : 0
     implicitHeight: activeItem && activeItem.visible
-      ? activeItem.implicitHeight + (root.vertical ? 2 * padAlong : 0) : 0
+      ? (root.vertical ? contentExtent + 2 * padAlong : activeItem.implicitHeight) : 0
     width: implicitWidth
     height: implicitHeight
     z: modulePointer.dragging ? 100 : 0
@@ -1826,7 +1842,7 @@ Item {
     HoverHandler { id: moduleHover }
 
     Rectangle {
-      id: widgetPill
+      id: pill
       visible: slot.pilled
       // Behind the module's own content, which follows as plain siblings.
       z: -1
@@ -1836,10 +1852,10 @@ Item {
       // widget and a short one still produce the same pill. Overflowing the
       // slot on that axis is intentional and harmless: it is centred, and
       // the slot never clips.
-      width: root.vertical ? root.widgetPillThickness : parent.width
-      height: root.vertical ? parent.height : root.widgetPillThickness
-      radius: root.widgetPillRadius
-      color: root.widgetBackground
+      width: root.vertical ? root.pillThickness : parent.width
+      height: root.vertical ? parent.height : root.pillThickness
+      radius: root.pillRadius
+      color: root.pillBackground
       Behavior on color { ColorAnimation { duration: 420; easing.type: Easing.InOutCubic } }
       Behavior on radius { NumberAnimation { duration: 420; easing.type: Easing.InOutCubic } }
     }
@@ -2033,7 +2049,11 @@ Item {
       if ("bar" in target) target.bar = root
       if ("moduleName" in target) target.moduleName = moduleName
       if ("settings" in target) target.settings = moduleSettings
-      applyEntryColor()
+      // Guarded: the host schedules injectProps through Qt.callLater, which
+      // captures the function itself, so it still runs after the slot starts
+      // being torn down -- at which point resolving another method on the
+      // dying object throws.
+      if (typeof applyEntryColor === "function") applyEntryColor()
     }
 
     // Per-widget colour.
@@ -2067,6 +2087,7 @@ Item {
       }
       paintedItems = []
       if (entryColor === "" || !activeItem) return
+      if (typeof paintForeground !== "function") return
       var painted = []
       paintForeground(activeItem, entryColor, painted, 0)
       paintedItems = painted
@@ -2091,8 +2112,19 @@ Item {
     // a Repeater, so a new workspace is a new WidgetButton that never saw the
     // pass above. Any such change moves the slot's implicit size, which makes
     // this a cheap and reliable place to re-apply.
-    onImplicitWidthChanged: if (entryColor !== "") Qt.callLater(applyEntryColor)
-    onImplicitHeightChanged: if (entryColor !== "") Qt.callLater(applyEntryColor)
+    // A Timer, not Qt.callLater: the timer is a child of the slot and dies
+    // with it, so a pending re-apply cannot outlive the object it targets.
+    // Qt.callLater keeps the captured function alive past destruction and
+    // then fails resolving the slot's own methods.
+    Timer {
+      id: entryColorReapply
+      interval: 0
+      repeat: false
+      onTriggered: slot.applyEntryColor()
+    }
+
+    onImplicitWidthChanged: if (entryColor !== "") entryColorReapply.restart()
+    onImplicitHeightChanged: if (entryColor !== "") entryColorReapply.restart()
 
     Component {
       id: customCommandModuleComponent
