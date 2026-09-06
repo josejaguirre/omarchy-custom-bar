@@ -11,6 +11,9 @@ This README covers **only what this plugin adds**. For stock behaviour (widget
 catalogue, custom modules, bar gestures, the widget API) see the upstream
 README at `/usr/share/omarchy/shell/plugins/bar/README.md`.
 
+**Custom modules run shell strings.** `exec`, `onClick`, `onRightClick` and
+`onMiddleClick` go through `bash -lc`, so treat `shell.json` as executable config.
+
 ---
 
 ## Install
